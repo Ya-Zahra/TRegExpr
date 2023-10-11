@@ -6,6 +6,75 @@
                                      (-) - bugfix
                                      (^) - improvement
 
+ v. 1.169 2023.09.16
+ -=- (^) Removed limit to "Max number of groups" (RegexMaxGroups).
+ -=- (-) Fixed recursive sub calls. Sub call could return to early.
+  By Martin Friebe.
+
+ v. 1.167 2023.09.13
+ -=- (+) Added Exec(AOffset, AMatchMustStartBefore: integer)
+  Limit the search for the first matched position to AMatchMustStartBefore
+ -=- (+) Added named group syntax: (?<name>regex)
+ -=- (+) Added named group reference/call syntax with \g and \k
+ -=- (^) Allow underscore in named group name
+ -=- (-) Fixed recursive calls accessing outer captures
+ -=- (^) Improved speed by reducing clean-up before each match execution
+ -=- (-) Fixed literal brace "{" after quantifier.
+  By Martin Friebe.
+
+ v. 1.165 2023.09.08
+ -=- (+) Added support for \R (any unicode line break).
+  by Alexey Torgashin.
+
+ v. 1.163 2023.08.24
+ -=- (+) Added full look-ahead support. Added full fixed length look-behind
+  support.Added limited variable length look-behind support.
+ -=- (+) Added (?modifier:pattern) support.
+ -=- (+) Added "property AllowBraceWithoutMin" to allow {,2} instead of {0,2}.
+ -=- (+) Added "property AllowLiteralBraceWithoutRange" to allow "{" to be
+  matched as literal, if no range follows.
+  By Martin Friebe.
+
+ v. 1.162 2023.08.21
+ -=- (-) Fix nested loops using OP_LOOP. Outer loops were run with the counter
+  of the inner loop.
+ -=- (^) Removed limit "LoopStackMax = 10" for nested loops (OP_LOOP)
+ -=- (^) Added indent for RegEx.Dump()
+ -=- (^) Detect fixed length for in branches, if all paths are of equal length.
+ -=- (^) Optimization, detect more anchors: ^ \G $ .*
+  By Martin Friebe.
+
+ v. 1.161 2023.08.17
+ -=- (-) Fix atomic groups. Allow backtracking the entire group.
+  Make '*','+',... operators aware of the atomic behaviour. Allow nesting.
+  By Martin Friebe.
+
+ v. 1.160 2023.08.15
+ -=- (+) Add \G for ExecNext to match the position where the previous match ended.
+  Or in Exec(AOffset) match the AOffset position
+  By Martin Friebe and Alexey Torgashin.
+ -=- (+) Add SetInputSubString(Text, Start, Len)
+  to only match within the selected substring.
+  By Martin Friebe and Alexey Torgashin.
+
+ v. 1.158 2022.05.30
+ -=- (-) Fix Substitute() result when 'subroutine' (?1) is used.
+ -=- (-) Fix work of recursion (?R) with back-references.
+  Reported by Konstantin Vlasov, fixed by Alexey Torgashin.
+
+ v. 1.156 2022.05.04
+ -=- (^) Compatability with Delphi 2007 (maybe D2005 too); fixed compiler warnings.
+ -=- (^) Renamed compiler define 'Unicode' to 'UnicodeRE' since 'Unicode'
+  is used by Delphi.
+ -=- (-) Fixed declaration of PtrInt for Delphi 6 and 7.
+  By Thomas Mueller (@dummzeuch) and Alexey Torgashin.
+
+ v. 1.155 2022.04.28
+ -=- (-) Fix Substitute() result for not-real group index like '$9' in regex '(b)'.
+  By Alexey Torgashin.
+ -=- (-) Fix UnQuoteChar() range check for Substitute() call.
+  By @delphicz and Alexey T.
+
  v. 1.153 2021.07.04
  -=- (^) Compatability with Delphi 7. By Alexey Torgashin.
 
@@ -36,7 +105,7 @@
  -=- (^) Rework handling of paired CR LF: simplified code, removed
   prop LinePairedSeparator (str), added prop UseLinePairedBreak (bool),
   it works faster.
- -=- (^) Removed prop ReplaceLineBreakFromOS, added instead ReplaceLineBreak. 
+ -=- (^) Removed prop ReplaceLineBreakFromOS, added instead ReplaceLineBreak.
  -=- (+) Added global vars: RegExprUsePairedBreak, RegExprReplaceLineBreak.
  -=- (+) Added global vars: RegExprLookaheadIsAtomic, RegExprLookbehindIsAtomic.
   By Alexey Torgashin.

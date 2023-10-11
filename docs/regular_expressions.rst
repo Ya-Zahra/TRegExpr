@@ -133,6 +133,15 @@ RegEx         Matches
 ``[\n-\x0D]`` characters from chr(10) to chr(13)
 ============= ==================================
 
+Dot Meta-Char
+~~~~~~~~~~~~~
+
+Meta-char ``.`` (dot) by default matches any character.
+But if you turn **off** the `modifier /s <#s>`_, then it won't match line-break characters.
+
+The ``.`` does not act as meta-class inside `user character classes <User Character Classes_>`_.
+``[.]`` means a literal ".".
+
 Meta-Classes
 ~~~~~~~~~~~~
 
@@ -154,6 +163,8 @@ RegEx      Matches
 ``\v``     | vertical whitespace: all characters treated as
            | line-breaks in the Unicode standard
 ``\V``     not a vertical whitespace
+``\R``     | unicode line break: LF, pair CR LF, CR,
+           | FF (form feed), VT (vertical tab), U+0085, U+2028, U+2029
 ======     ==============================================
 
 You may use all meta-classes, mentioned in the table above, within
@@ -187,12 +198,12 @@ Line Boundaries
 ============= ================================================
 Meta-char     Matches
 ============= ================================================
-``.``         any character, can include line-breaks
 ``^``         zero-length match at start of line
 ``$``         zero-length match at end of line
 ``\A``        zero-length match at the very beginning
 ``\z``        zero-length match at the very end
 ``\Z``        like ``\z`` but also matches before the final line-break
+``\G``        zero-length match at the end pos of the previous match
 ============= ================================================
 
 Examples:
@@ -224,9 +235,6 @@ Meta-char ``\A`` matches zero-length position at the very beginning of the input
 ``\z`` - at the very ending. They ignore `modifier /m <#m>`_.
 ``\Z`` is like ``\z`` but also matches before the final line-break (LF and CR LF).
 Behaviour of ``\A``, ``\z``, ``\Z`` is made like in most of major regex engines (Perl, PCRE, etc).
-
-Meta-char ``.`` (dot) by default matches any character, but if you
-turn **off** the `modifier /s <#s>`_, then it won't match line-breaks inside the string.
 
 Note that ``^.*$`` does not match a string between ``\x0D\x0A``,
 because this is unbreakable line separator.
@@ -270,13 +278,14 @@ Quantifiers
 ~~~~~~~~~~~
 
 Any item of a regular expression may be followed by quantifier.
-Quantifier specifies number of repetition of the item.
+Quantifier specifies number of repetitions of the item.
 
 ========== ============================================================
 RegEx      Matches
 ========== ============================================================
 ``{n}``    exactly ``n`` times
 ``{n,}``   at least ``n`` times
+``{,m}``   not more than ``m`` times (only with AllowBraceWithoutMin)
 ``{n,m}``  at least ``n`` but not more than ``m`` times
 ``*``      zero or more, similar to ``{0,}``
 ``+``      one or more, similar to ``{1,}``
@@ -289,7 +298,12 @@ number of times to match ``n`` and the maximum ``m``.
 The ``{n}`` is equivalent to ``{n,n}`` and matches exactly ``n`` times.
 The ``{n,}`` matches ``n`` or more times.
 
+The variant ``{,m}`` is only supported if the property AllowBraceWithoutMin is set.
+
 There is no practical limit to the values n and m (limit is maximal signed 32-bit value).
+
+Using ``{`` without a correct range will give an error. This behaviour can be changed by setting the property AllowLiteralBraceWithoutRange, which will accept ``{`` as a literal char, if not followed by a range.
+A range with a low value bigger than the high value will always give an error.
 
 ================== ========================================================================
 RegEx              Matches
@@ -414,14 +428,18 @@ The entire regex has index 0.
 Backreferences
 --------------
 
-Meta-chars ``\1`` through ``\9`` are interpreted as backreferences to groups.
+Meta-chars ``\1`` through ``\9`` are interpreted as backreferences to capture groups.
 They match the previously found group with the specified index.
+
+The meta char ``\g`` followed by a number is also interpreted as backreferences to capture groups. It can be followed by a multi-digit number.
+
 
 =========== ============================
 RegEx       Matches
 =========== ============================
 ``(.)\1+``  ``aaaa`` and ``cc``
 ``(.+)\1+`` also ``abab`` and ``123123``
+``(.)\g1+`` ``aaaa`` and ``cc``
 =========== ============================
 
 RegEx ``(['"]?)(\d+)\1`` matches ``"13"`` (in double quotes), or ``'4'`` (in
@@ -430,11 +448,22 @@ single quotes) or ``77`` (without quotes) etc.
 Named Groups and Backreferences
 -------------------------------
 
-To make some group named, use this syntax: ``(?P<name>expr)``. Also Perl syntax is supported: ``(?'name'expr)``.
+To make some group named, use this syntax: ``(?P<name>expr)``. Also Perl syntax is supported: ``(?'name'expr)``. And further: ``(?<name>expr)``
 
 Name of group must be valid identifier: first char is letter or "_", other chars are alphanumeric or "_". All named groups are also usual groups and share the same numbers 1 to 9.
 
-Backreferences to named groups are ``(?P=name)``, the numbers ``\1`` to ``\9`` can also be used.
+Backreferences to named groups are ``(?P=name)``, the numbers ``\1`` to ``\9`` can also be used. As well as the example ``\g`` and ``\k`` in the table below.
+
+Supported syntax are
+==========================
+``(?P=name)``
+``\g{name}``
+``\k{name}``
+``\k<name>``
+``\k'name'``
+==========================
+
+Example
 
 ========================== ============================
 RegEx                      Matches
@@ -581,9 +610,8 @@ Negative lookbehind assertion: ``(?<!foo)bar`` matches "bar" only if it's not pr
 
 Limitations:
 
-* Brackets for lookahead must be at the very ending of expression, and brackets for lookbehind must be at the very beginning. So assertions between choices ``|``, or inside groups, are not supported.
-* For lookbehind ``(?<!foo)bar``, regex "foo" must be of fixed length, ie contains only operations of fixed length matches. Quantifiers are not allowed, except braces with the repeated numbers ``{n}`` or ``{n,n}``. Char-classes are allowed here, dot is allowed, ``\b`` and ``\B`` are allowed. Groups and choices are not allowed.
-* For other 3 assertion kinds, expression in brackets can be of any complexity.
+* Variable length lookbehind are not allowed to contain capture groups. This can be allowed by setting the property ``AllowUnsafeLookBehind``. If this is enabled and there is more than one match in the text that the group might capture, then the wrong match may be captured. This does not affect the correctness of the overall assertion. (I.e., the lookbehind will correctly return if the text before matched the pattern).
+* Variable length lookbehind may be slow to execute, if they do not match. 
 
 Non-capturing Groups
 --------------------
@@ -627,6 +655,8 @@ that follows the modifiers. So in ``((?i)Saint)-Petersburg`` it affects
 only group ``((?i)Saint)`` so it will match ``saint-Petersburg``
 but not ``saint-petersburg``.
 
+Inline modifiers can also be given as part of a non-capturing group: ``(?i:pattern)``.
+
 ============================= ==================================================
 RegEx                         Matches
 ============================= ==================================================
@@ -661,6 +691,16 @@ Subroutine calls
 Syntax for call to numbered groups: ``(?1)`` ... ``(?90)`` (maximal index is limited by code).
 
 Syntax for call to named groups: ``(?P>name)``. Also Perl syntax is supported: ``(?&name)``.
+
+Supported syntax are
+==========================
+``(?number)``
+``(?P>name)``
+``(?&name)``
+``\g<name>``
+``\g'name'``
+==========================
+
 
 This is like recursion but calls only code of capturing group with specified index.
 
@@ -699,11 +739,11 @@ Unicode standard has names for character categories. These are 2-letter strings.
 * Zp - Paragraph Separator
 * Zs - Space Separator
 
-Meta-character ``\p`` denotes one Unicode char of specified category. Syntaxes: ``\pL`` and ``\p{L}`` for 1-letter name, ``\p{Lu}`` for 2-letter names.
+Meta-character ``\p`` denotes one Unicode char of specified category. Syntax: ``\pL`` and ``\p{L}`` for 1-letter name, ``\p{Lu}`` for 2-letter names.
 
 Meta-character ``\P`` is inverted, it denotes one Unicode char **not** in the specified category.
 
-These meta-characters are supported withing character classes too.
+These meta-characters are supported within character classes too.
 
 Afterword
 ---------
