@@ -6,11 +6,23 @@ unit tests;
 
 { $DEFINE DUMPTESTS} //define this to dump results to console
 
-{$IFDEF VER130} {$DEFINE D5} {$DEFINE D4} {$DEFINE D3} {$DEFINE D2} {$ENDIF} // D5
-{$IFDEF VER140} {$DEFINE D6} {$DEFINE D5} {$DEFINE D4} {$DEFINE D3} {$DEFINE D2} {$ENDIF} // D6
-{$IFDEF VER150} {$DEFINE D7} {$DEFINE D6} {$DEFINE D5} {$DEFINE D4} {$DEFINE D3} {$DEFINE D2} {$ENDIF} // D7
+{$IFDEF VER130} {$DEFINE NOTUSINGDUNITX} {$DEFINE D5} {$DEFINE D4} {$DEFINE D3} {$DEFINE D2} {$ENDIF} // D5
+{$IFDEF VER140} {$DEFINE NOTUSINGDUNITX} {$DEFINE D6} {$DEFINE D5} {$DEFINE D4} {$DEFINE D3} {$DEFINE D2} {$ENDIF} // D6
+{$IFDEF VER150} {$DEFINE NOTUSINGDUNITX} {$DEFINE D7} {$DEFINE D6} {$DEFINE D5} {$DEFINE D4} {$DEFINE D3} {$DEFINE D2} {$ENDIF} // D7
+{$IFDEF VER160} {$DEFINE NOTUSINGDUNITX} {$DEFINE D8} {$DEFINE D7} {$DEFINE D6} {$DEFINE D5} {$DEFINE D4} {$DEFINE D3} {$DEFINE D2} {$ENDIF} // D7
+{$IFDEF VER170} {$DEFINE NOTUSINGDUNITX} {$DEFINE D2005} {$DEFINE D8} {$DEFINE D7} {$DEFINE D6} {$DEFINE D5} {$DEFINE D4} {$DEFINE D3} {$DEFINE D2} {$ENDIF} // D7
+{$IFDEF VER180} {$DEFINE NOTUSINGDUNITX} {$DEFINE D2006} {$DEFINE D2005} {$DEFINE D8} {$DEFINE D7} {$DEFINE D6} {$DEFINE D5} {$DEFINE D4} {$DEFINE D3} {$DEFINE D2} {$ENDIF} // D7
+{$IFDEF VER185} {$DEFINE NOTUSINGDUNITX} {$DEFINE D2006} {$DEFINE D2005} {$DEFINE D8} {$DEFINE D7} {$DEFINE D6} {$DEFINE D5} {$DEFINE D4} {$DEFINE D3} {$DEFINE D2} {$ENDIF} // D7
+{$IFDEF VER190} {$DEFINE NOTUSINGDUNITX} {$DEFINE D2007} {$DEFINE D2006} {$DEFINE D2005} {$DEFINE D8} {$DEFINE D7} {$DEFINE D6} {$DEFINE D5} {$DEFINE D4} {$DEFINE D3} {$DEFINE D2} {$ENDIF} // D7
+{$IFDEF VER200} {$DEFINE NOTUSINGDUNITX} {$DEFINE D2009} {$DEFINE D2007} {$DEFINE D2006} {$DEFINE D2005} {$DEFINE D8} {$DEFINE D7} {$DEFINE D6} {$DEFINE D5} {$DEFINE D4} {$DEFINE D3} {$DEFINE D2} {$ENDIF} // D7
+
 {$IFDEF D5} {$DEFINE OverMeth} {$ENDIF}
 {$IFDEF FPC} {$DEFINE OverMeth} {$ENDIF}
+{$IFDEF D7}
+  {$UNDEF FastUnicodeData}
+{$ELSE}
+  {$DEFINE FastUnicodeData}
+{$ENDIF}
 
 {$DEFINE UnicodeRE}
 
@@ -49,6 +61,7 @@ type
   TTestRegexpr= class(TTestCase)
   private
     RE: TTestableRegExpr;
+    FErrorInfo: String;
   protected
     procedure RunRETest(aIndex: Integer);
     procedure CompileRE(const AExpression: RegExprString);
@@ -62,6 +75,7 @@ type
     procedure IsMatching(AErrorMessage: String; ARegEx, AInput: RegExprString;
       AExpectStartLenPairs: array of Integer; AOffset: integer = 1; AMustMatchBefore: integer = 0);
     procedure IsNotMatching(AErrorMessage: String; ARegEx, AInput: RegExprString; AOffset: integer = 1; AMustMatchBefore: integer = 0);
+    procedure IsErrorOnMatch(AErrorMessage: String; ARegEx, AInput: RegExprString; AOffset: integer = 1; AMustMatchBefore: integer = 0; ExpErrorId: Integer = 0);
     procedure SetUp; override;
     procedure TearDown; override;
   published
@@ -70,13 +84,18 @@ type
     procedure TestBads;
     procedure TestModifiers;
     procedure TestContinueAnchor;
+    procedure TestLineBreak;
     procedure TestRegMustExist;
     procedure TestAtomic;
+    procedure TestQuesitonMark;
     procedure TestBraces;
     procedure TestLoop;
+    procedure TestEmptyLoop;
+    procedure TestBranches; // Also checks "FillFirstChar"
     procedure TestReferences;
     procedure TestSubCall;
     procedure TestNamedGroups;
+    procedure TestCaptures;
     procedure TestRecurseAndCaptures;
     procedure TestIsFixedLength;
     procedure TestMatchBefore;
@@ -84,6 +103,8 @@ type
     procedure TestRegLookAhead;
     procedure TestRegLookBehind;
     procedure TestRegLookAroundMixed;
+    procedure TestResetMatchPos;
+    procedure TestMultiLine;
     {$IFDEF OverMeth}
     procedure TestReplaceOverload;
     {$ENDIF}
@@ -139,9 +160,11 @@ type
     procedure RunTest50;
     procedure TestGroups;
     {$IFDEF UnicodeRE}
+    {$IFDEF FastUnicodeData}
     procedure RunTest51unicode;
     procedure RunTest52unicode;
     procedure RunTest70russian;
+    {$ENDIF}
     {$ENDIF}
     procedure RunTest53;
     procedure RunTest54;
@@ -797,13 +820,13 @@ const
 
 procedure TTestRegexpr.IsFalse(AErrorMessage: string; AConditionToCheck: boolean);
 begin
-  IsTrue(AErrorMessage, not AConditionToCheck)
+  IsTrue(AErrorMessage+FErrorInfo, not AConditionToCheck)
 end;
 
 procedure TTestRegexpr.IsTrue(AErrorMessage: string; AConditionToCheck: boolean);
 begin
   {$IFDEF FPC}
-  AssertTrue(AErrorMessage, AConditionToCheck);
+  AssertTrue(AErrorMessage+FErrorInfo, AConditionToCheck);
   {$ELSE}
   CheckTrue(AConditionToCheck, AErrorMessage)
   {$ENDIF}
@@ -813,7 +836,7 @@ procedure TTestRegexpr.IsNotNull(AErrorMessage: string; AObjectToCheck: TObject
   );
 begin
   {$IFDEF FPC}
-  AssertNotNull(AErrorMessage, AObjectToCheck);
+  AssertNotNull(AErrorMessage+FErrorInfo, AObjectToCheck);
   {$ELSE}
   CheckNotNull(AObjectToCheck, AErrorMessage)
   {$ENDIF}
@@ -822,7 +845,7 @@ end;
 procedure TTestRegexpr.AreEqual(AErrorMessage: string; s1, s2: string);
 begin
   {$IFDEF FPC}
-  AssertEquals(AErrorMessage, s1,s2);
+  AssertEquals(AErrorMessage+FErrorInfo, s1,s2);
   {$ELSE}
   CheckEquals(s1,s2, AErrorMessage)
   {$ENDIF}
@@ -831,7 +854,7 @@ end;
 procedure TTestRegexpr.AreEqual(AErrorMessage: string; i1, i2: integer);
 begin
   {$IFDEF FPC}
-  AssertEquals(AErrorMessage, i1,i2);
+  AssertEquals(AErrorMessage+FErrorInfo, i1,i2);
   {$ELSE}
   CheckEquals(i1,i2, AErrorMessage)
   {$ENDIF}
@@ -844,7 +867,7 @@ begin
     RE.TestStartErrorCatching;
     CompileRE(AExpression);
     if ExpErrorId <> 0 then
-      AreEqual(AErrorMessage, ExpErrorId, RE.TestLastError)
+      AreEqual(AErrorMessage+FErrorInfo, ExpErrorId, RE.TestLastError)
     else
       IsTrue(AErrorMessage, RE.TestLastError <> 0);
   finally
@@ -857,14 +880,20 @@ procedure TTestRegexpr.IsMatching(AErrorMessage: String; ARegEx,
   AOffset: integer; AMustMatchBefore: integer);
 var
   i: Integer;
+  {$IF DEFINED(SizeInt)}
   L: SizeInt;
+  {$ELSE}
+  L: Integer;
+  {$IFEND}
 begin
   CompileRE(ARegEx);
   RE.InputString:= AInput;
 
   IsTrue(AErrorMessage + ' Exec must give True', RE.ExecPos(AOffset, AMustMatchBefore));
 
-  L := Length(AExpectStartLenPairs) div 2;
+  L := Length(AExpectStartLenPairs);
+  while (L > 1) and (AExpectStartLenPairs[L-2] = -1) do dec(L,2);
+  L := L div 2;
   AreEqual(AErrorMessage + ': MatchCount', L - 1, RE.SubExprMatchCount);
   for i := 0 to L - 1 do begin
     AreEqual(AErrorMessage + ': MatchPos['+inttostr(i)+']', AExpectStartLenPairs[i*2], RE.MatchPos[i]);
@@ -883,6 +912,28 @@ begin
 
   if r then
     IsFalse(AErrorMessage + ': Exec must give False, but found at ' + IntToStr(RE.MatchPos[0]), r);
+end;
+
+procedure TTestRegexpr.IsErrorOnMatch(AErrorMessage: String; ARegEx,
+  AInput: RegExprString; AOffset: integer; AMustMatchBefore: integer;
+  ExpErrorId: Integer);
+var
+  r: Boolean;
+begin
+  CompileRE(ARegEx);
+  RE.InputString:= AInput;
+  r := True;
+  try
+    r := RE.ExecPos(AOffset, AMustMatchBefore);
+  except
+    r := False;
+  end;
+
+  if r then
+    IsFalse(AErrorMessage + ': Exec must give False, but found at ' + IntToStr(RE.MatchPos[0]), r);
+
+  if ExpErrorId <> 0 then
+    AreEqual(AErrorMessage, ExpErrorId, RE.TestLastError);
 end;
 
 procedure TTestRegexpr.SetUp;
@@ -923,22 +974,31 @@ var
 begin
   CompileRE('A\r(\n)'); // just to print compiled re - it will be recompiled below
   act:=ReplaceRegExpr('A\r(\n)', 'a'#$d#$a, '\n', [rroModifierI, rroUseSubstitution]);
-  AssertEquals('Replace failed', PrintableString(#$a), PrintableString(Act))
+  AreEqual('Replace failed', PrintableString(#$a), PrintableString(Act))
 end;
 {$ENDIF}
 
 procedure TTestRegexpr.TestBads;
 begin
-  TestBadRegex('Error for matching zero width {}', '(a{0,2})*', 115);
-//  TestBadRegex('Error for optional lookaround', '(?=a)?', 115);
-  TestBadRegex('Error for empty group (only look ahead)', '((?=a))+', 115);
-  TestBadRegex('Error for empty group (only look ahead)', '((?=a))*', 115);
+  TestBadRegex('Error for invalid loop', '*');
+  TestBadRegex('Error for invalid loop', '^*');
+  TestBadRegex('Error for invalid loop', '\b*');
+  TestBadRegex('Error for invalid loop', '+');
+  TestBadRegex('Error for invalid loop', '^+');
+  TestBadRegex('Error for invalid loop', '\b+');
+  TestBadRegex('Error for invalid loop', '.?*');
+  TestBadRegex('Error for invalid loop', '.**');
+  TestBadRegex('Error for invalid loop', '.+*');
+  TestBadRegex('Error for invalid loop', '.++?');
 
   RE.AllowUnsafeLookBehind := False;
   TestBadRegex('No Error for var-len look behind with capture', '.(?<=(.+))', 153);
 
   TestBadRegex('value for reference to big', '()\9999999999999999999999999999999999999999999999999999()');
   TestBadRegex('value for reference to big', '()\g9999999999999999999999999999999999999999999999999999()');
+
+  // Only if RegExpWithStackOverflowCheck is enabled and supported
+  //IsErrorOnMatch('Too Complex',   '^((b|a){1,5000}){1,5000}',   StringOfChar('a', 991*503)); // both factors are prime
 end;
 
 procedure TTestRegexpr.TestModifiers;
@@ -987,14 +1047,17 @@ begin
   IsMatching   ('CaseSens On/Off (?i:B)',   '(?i)A(?-i:B)C',     '1aBc',     [2,3]);
   IsNotMatching('CaseSens On/Off (?i:B)',   '(?i)A(?-i:B)C',     '1abc');
 
+
+  IsMatching   ('CaseSens On/Off (?i:B)+',   '(?i)A(?-i:B)+C',     '1aBBBc',     [2,5]);
+  IsNotMatching   ('CaseSens On/Off (?i:B)+',   '(?i)A(?-i:B)+C',     '1aBbBc');
 end;
 
 procedure TTestRegexpr.TestContinueAnchor;
   procedure AssertMatch(AName: String; AStart, ALen: Integer);
   begin
-    AreEqual(AName + 'MatchCount', 1, RE.SubExprMatchCount);
-    AreEqual(AName + 'MatchPos[1]', AStart, RE.MatchPos[1]);
-    AreEqual(AName + 'MatchLen[1]', ALen, RE.MatchLen[1]);
+    AreEqual(AName + ' MatchCount', 1, RE.SubExprMatchCount);
+    AreEqual(AName + ' MatchPos[1]', AStart, RE.MatchPos[1]);
+    AreEqual(AName + ' MatchLen[1]', ALen, RE.MatchLen[1]);
   end;
 begin
   // Without \G MatchNext will skip
@@ -1106,6 +1169,22 @@ begin
   AssertMatch('(?<=^.\GA...)(X)  _A123X3 offset 2 ', 6, 1);
 end;
 
+procedure TTestRegexpr.TestLineBreak;
+begin
+  IsNotMatching('no linebreak (stand alone)', '\R', 'abcd');
+  IsMatching('no linebreak (stand alone / loop)', '\R*', 'abcd', [1,0]);
+
+  IsMatching('no loop linebreak', 'a\Rb', 'a'#13'b',      [1,3] );
+  IsMatching('no loop linebreak', 'a\Rb', 'a'#10'b',      [1,3] );
+  IsMatching('no loop linebreak', 'a\Rb', 'a'#13#10'b',   [1,4] );
+  IsMatching('loop linebreak', 'a\R*b', 'a'#13'b',      [1,3] );
+  IsMatching('loop linebreak', 'a\R*b', 'a'#10'b',      [1,3] );
+  IsMatching('loop linebreak', 'a\R*b', 'a'#13#10'b',   [1,4] );
+
+  IsNotMatching('no loop linebreak', 'a\R\Rb', 'a'#13#10'b');
+//  IsNotMatching('   loop linebreak', 'a\R+\Rb', 'a'#13#10'b');
+end;
+
 procedure TTestRegexpr.TestRegMustExist;
 begin
   CompileRE('\w*abcd');
@@ -1157,6 +1236,42 @@ begin
   IsMatching('NESTED 2: Atomic backtrace until match is found ',
              'a(?>((?>b.*?cx..8))|.)',
              '1ab__cx__9cx__8_...56Yb', [2,14,  3,13]);
+
+  IsNotMatching('Recursive atomic', '^(?''A''(?>...?)(?:x|(?&A)))', 'aaaaaaaax');
+  IsMatching('Recursive atomic',    '^(?''A''(?>...?)(?:x|(?&A)))', 'aaaaaaaaax',  [1,10,  1,10]);
+
+  IsNotMatching('Recursive atomic', '^(?''A''(?>b[^b]+(?&A)?x+))', 'baaabaaaaaxx');
+  IsNotMatching('atomic in loop', '^(?:(?>b[^b]+?)+x+)', 'baaabaaaaaxx');
+  IsMatching('loop in atomic', '^(?>(?:b[^b]+?)+x+)', 'baaabaaaaaxx', [1,12]);
+end;
+
+procedure TTestRegexpr.TestQuesitonMark;
+var
+  i: Integer;
+  c: RegExprString;
+begin
+  for i := 0 to 5 do begin
+    case i of
+      0: c := 'c';
+      1: c := '(?:c)';
+      2: c := '(?:c|x)';
+      3: c := '(?>c)';
+      4: c := '(?>c?)';
+      5: c := '(?>c|x)';
+    end;
+
+    IsMatching(   '?',  'abcc'+c+'?d',  'abccd',  [1,5]);
+    IsMatching(   '??', 'abcc'+c+'??d', 'abccd',  [1,5]);
+    IsMatching(   '?+', 'abcc'+c+'?+d',  'abccd',  [1,5]);
+    IsMatching(   '?+', 'abc'+c+'?+d',  'abccd',  [1,5]);
+
+    IsMatching(   '?',  'ab'+c+'?ccd',  'abccd',  [1,5]);
+    IsMatching(   '??', 'ab'+c+'??ccd', 'abccd',  [1,5]);
+    IsMatching(   '?+', 'ab'+c+'?+cd',  'abccd',  [1,5]);
+    IsMatching(   '?+', 'abc'+c+'?+d',  'abccd',  [1,5]);
+
+    IsNotMatching('?+', 'ab'+c+'?+ccd', 'abccd');
+  end;
 end;
 
 procedure TTestRegexpr.TestBraces;
@@ -1261,6 +1376,9 @@ begin
 end;
 
 procedure TTestRegexpr.TestLoop;
+var
+  i, j: Integer;
+  y, q: RegExprString;
 begin
   // The patterns below **should** use OP_LOOP[ng]
 
@@ -1315,6 +1433,98 @@ begin
              'Aayyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy');  // 38 y
 
 
+  IsMatching('nested {} poss',
+             'Aa(x|y(x|y){3,4}){3,4}+',
+             'Aayyyyyyyyyyyy',  [1,14,   11,4,  14,1]); // minimum y
+  IsNotMatching('nested {} poss',
+             'Aa(x|y(x|y){3,4}+){3,4}+',
+             'Aayyyyyyyyyyyy'); // minimum y
+  IsNotMatching('nested {} poss',
+             'Aa(x|y(x|y){3,4}+){3,4}',
+             'Aayyyyyyyyyyyy'); // minimum y
+  IsMatching('nested {} poss',
+             'Aa(x|y(x|y){2,3}+){3,4}+',
+             'Aayyyyyyyyyyyy',  [1,14,   11,4,  14,1]); // minimum y
+
+  IsMatching('nested {} poss',
+             'Aa(x|y(x|y){3,4}){3,4}+',
+             'Aayyyyyyyyyyyyy',  [1,15,   12,4,  15,1]); // minimum y
+  IsNotMatching('nested {} poss',
+             'Aa(x|y(x|y){3,4}+){3,4}+',
+             'Aayyyyyyyyyyyyy'); // minimum y
+  IsNotMatching('nested {} poss',
+             'Aa(x|y(x|y){3,4}+){3,4}',
+             'Aayyyyyyyyyyyyy'); // minimum y
+
+  IsMatching('nested {} poss',
+             'Aa(x|y(x|y){3,4}+){3,4}',
+             'Aayyyyyyyyyyyyyy',  [1,16,   13,4,  16,1]); // two extra y
+  IsMatching('nested {} poss',
+             'Aa(x|y(x|y){3,4}+){3,4}+',
+             'Aayyyyyyyyyyyyyy',  [1,16,   13,4,  16,1]); // two extra y
+  IsMatching('nested {} poss',
+             'Aa(x|y(x|y){3,4}){3,4}+',
+             'Aayyyyyyyyyyyyyy',  [1,16,   13,4,  16,1]); // two extra y
+
+
+  for i := 0 to 3 do
+  for j := 0 to 3 do begin
+    case i of
+      0: y := 'y';
+      1: y := '(?:y)';
+      2: y := 'z|y';
+      3: y := 'z|(?:y)';
+    end;
+    case j of
+      0: q := '*';
+      1: q := '*?';
+      2: q := '+';
+      3: q := '+?';
+    end;
+    IsMatching('nested not poss',
+               'Aa((('+y+q+'b)*)y*b)',
+               'Aayyybyyybyyybyyybyyybyyy',  [1,22,   3,20, 3,16,  15,4]);
+    IsNotMatching('nested  poss',
+               'Aa((('+y+q+'b)*+)y*b)',
+               'Aayyybyyybyyybyyybyyybyyy');
+    IsMatching('nested not poss',
+               'Aa((('+y+q+'b)*){0,1}y*b)',
+               'Aayyybyyybyyybyyybyyybyyy',  [1,22,   3,20, 3,16,  15,4]);
+    IsMatching('nested not poss',
+               'Aa((((?>'+y+q+'b))*){0,1}y*b)',
+               'Aayyybyyybyyybyyybyyybyyy',  [1,22,   3,20, 3,16,  15,4]);
+    IsNotMatching('nested not poss',
+               'Aa((?>(((?>'+y+q+'b))*))+y*b)',
+               'Aayyybyyybyyybyyybyyybyyy');
+    IsNotMatching('nested not poss',
+               'Aa((?>(('+y+q+'b)*))+y*b)',  // The possesive ?> will match to much, and wont allow the inner * to back-track
+               'Aayyybyyybyyybyyybyyybyyy');
+    IsNotMatching('nested not poss',
+               'Aa((('+y+q+'b)*){0,1}+y*b)',  // The possesive {0,1}+ will match to much, and wont allow the inner * to back-track
+               'Aayyybyyybyyybyyybyyybyyy');
+    IsNotMatching('nested not poss',
+               'Aa((((?>'+y+q+'b))*){0,1}+y*b)',  // The possesive {0,1}+ will match to much, and wont allow the inner * to back-track
+               'Aayyybyyybyyybyyybyyybyyy');
+    IsNotMatching('nested not poss',
+               'Aa((?>(((?>'+y+q+'b))*)){0,1}+y*b)',  // The possesive {0,1}+ will match to much, and wont allow the inner * to back-track
+               'Aayyybyyybyyybyyybyyybyyy');
+    IsNotMatching('nested not poss',
+               'Aa((?>(('+y+q+'b)*)){0,1}+y*b)',  // The possesive {0,1}+ will match to much, and wont allow the inner * to back-track
+               'Aayyybyyybyyybyyybyyybyyy');
+    IsNotMatching('nested not poss',
+               'Aa((('+y+q+'b)*){1,1}+y*b)',  //
+               'Aayyybyyybyyybyyybyyybyyy');
+    IsNotMatching('nested  poss',
+               'Aa((('+y+q+'b)*+){1,2}y*b)',
+               'Aayyybyyybyyybyyybyyybyyy');
+    IsMatching('nested not poss',
+               'Aa((('+y+q+'b)*)y*b){1,2}',
+               'Aayyybyyybyyybyyybyyybyyy',  [1,22,   3,20, 3,16,  15,4]);
+    IsNotMatching('nested  poss',
+               'Aa((('+y+q+'b)*+)y*b){1,2}',
+               'Aayyybyyybyyybyyybyyybyyy');
+  end;
+
 
   IsMatching('nested branch *? ',
              'A(?>(?:b|c(?:d|e)*?)*?_)a',
@@ -1355,6 +1565,241 @@ begin
              'AayyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyBB',   [1,44,   -1,-1, -1,-1, -1,-1] ); // 40 y
 
 
+  IsMatching('loop group-ref', '^(123)\1*1..a', '123123123abcde',   [1,10,   1,3] );
+  IsNotMatching('loop group-ref (empty)', '(\b)\1*3', '.. test 2345' );
+  IsMatching('loop group-ref (empty)', '(\b)\1*.*3', '.. test 2345',   [4,7,   4,0] );
+
+end;
+
+procedure TTestRegexpr.TestEmptyLoop;
+var
+  WithAtomic, LoopIdx, PtnIdx, ExpGrpPos1, ExpGrpLen1: Integer;
+  LoopTxt, PtnText: RegExprString;
+  s: String;
+  MatchZeroTimes, ForceMatchZeroTimes: Boolean;
+begin
+  for LoopIdx := 0 to 18 do begin
+    case LoopIdx of
+       0: LoopTxt := '';
+       1: LoopTxt := '?';
+       2: LoopTxt := '??';
+       3: LoopTxt := '+';
+       4: LoopTxt := '+?';
+       5: LoopTxt := '++';
+       6: LoopTxt := '*';
+       7: LoopTxt := '*?';
+       8: LoopTxt := '*+';
+       9: LoopTxt := '{0}';
+      10: LoopTxt := '{1}';
+      11: LoopTxt := '{5}';
+      12: LoopTxt := '{0,5}';
+      13: LoopTxt := '{1,5}';
+      14: LoopTxt := '{0}?';
+      15: LoopTxt := '{1}?';
+      16: LoopTxt := '{5}?';
+      17: LoopTxt := '{0,5}?';
+      18: LoopTxt := '{1,5}?';
+      //19: LoopTxt := '{0}+';
+      //20: LoopTxt := '{1}+';
+      //21: LoopTxt := '{5}+';
+      //22: LoopTxt := '{0,5}+';
+      //23: LoopTxt := '{1,5}+';
+    end;
+
+    for PtnIdx := 0 to 18 do
+    for WithAtomic := 0 to 2 do begin
+      case PtnIdx of
+         0: PtnText := '()';
+         1: PtnText := '(xx|)';
+         2: PtnText := '(|xx)';
+         3: PtnText := '(xx|(?:xx)?)';
+         4: PtnText := '(xx|(?:))';
+         5: PtnText := '(xx|(?:)*)'; // nested
+         6: PtnText := '(xx|(?:)*?)'; // nested
+         7: PtnText := '(xx|(?:)*+)'; // nested
+         8: PtnText := '(xx|(?:)+)'; // nested
+         9: PtnText := '(xx|(?:)+?)'; // nested
+        10: PtnText := '(xx|(?:)++)'; // nested
+        11: PtnText := '((?:(?:)+)*|(?:(?:)*)+)'; // nested
+        12: PtnText := '((?=))';
+        13: PtnText := '((?!X))';
+        14: PtnText := '((?=(?:)*))'; // nested in look-around
+        15: PtnText := '((?:(?:(?:)*){10,11}){20,21})';
+        16: PtnText := '((?>(?:)+)*|(?:(?:)*)+)'; // nested inner atom
+        17: PtnText := '((?:(?>)+)*|(?:(?>)*)+)'; // nested inner atom
+        18: PtnText := '(\b)';
+      end;
+       // (?> atomic
+      case WithAtomic of
+        0: ;
+        1: begin
+          Insert('(?>', PtnText, 2);
+          PtnText := PtnText + ')';
+        end;
+        2: PtnText := '(?>' + PtnText + ')';
+      end;
+
+      MatchZeroTimes := LoopIdx in [2,7,9,14,17,19];
+      ForceMatchZeroTimes := LoopIdx in [9,14,19];
+
+      ExpGrpPos1 := 1;
+      ExpGrpLen1 := 0;
+      if MatchZeroTimes then begin
+        ExpGrpPos1 := -1;
+        ExpGrpLen1 := -1;
+      end;
+
+      s := LoopTxt + ' / ' + PtnText;
+      IsMatching('Empty group '+s,                PtnText+LoopTxt,      'a',   [1,0,  ExpGrpPos1,ExpGrpLen1]);
+      if PtnIdx < 18 then
+        IsMatching('Empty group in empty text '+s,  PtnText+LoopTxt,      '',    [1,0,  ExpGrpPos1,ExpGrpLen1]);
+      IsMatching('Empty group before text '+s,    PtnText+LoopTxt+'a',  'a',   [1,1,  ExpGrpPos1,ExpGrpLen1]);
+
+      if ForceMatchZeroTimes then
+        IsNotMatching('Empty group backref '+s,   PtnText+LoopTxt+'\1', 'a')
+      else
+        IsMatching('Empty group backref '+s,          PtnText+LoopTxt+'\1', 'a',   [1,0,  1,0]);
+
+      if ForceMatchZeroTimes or (PtnIdx = 18) then
+        IsNotMatching('Empty group backref in empty'+s,  PtnText+LoopTxt+'\1', '')
+      else
+        IsMatching('Empty group backref in empty'+s,  PtnText+LoopTxt+'\1', '',    [1,0,  1,0]);
+
+
+
+      if ExpGrpPos1 > 0 then ExpGrpPos1 := 2;
+      IsMatching('Empty group after text '+s,     'a'+PtnText+LoopTxt,     'a',   [1,1,  ExpGrpPos1,ExpGrpLen1]);
+
+      if PtnIdx < 18 then begin
+        IsMatching('Empty group mid   text '+s,     'a'+PtnText+LoopTxt,     'aa',  [1,1,  ExpGrpPos1,ExpGrpLen1]);
+        IsMatching('Empty group mid   text '+s,     'a'+PtnText+LoopTxt+'a', 'aa',  [1,2,  ExpGrpPos1,ExpGrpLen1]);
+
+        if ForceMatchZeroTimes then begin
+          IsNotMatching('Empty group mid + backref at end '+s,  'a'+PtnText+LoopTxt+'a\1', 'aa');
+        end
+        else begin
+          IsMatching('Empty group mid + backref at end '+s,  'a'+PtnText+LoopTxt+'a\1', 'aa',  [1,2,  2,0]);
+          IsMatching('Empty group mid + backref at end '+s,  'a'+PtnText+LoopTxt+'a(\1)', 'aa',  [1,2,  2,0,  3,0]);
+        end;
+      end;
+
+    end;
+  end;
+
+  // The backref in the loop changes each iteration. So even if the match is empty, it must be executed the correct amount of times
+  IsMatching('Empty group match-count',  '((?=.*(?:\2|a)(.))|$){1,4}', '1234567890abcdefghi',   [1,0,  1,0,  15,1]);
+  IsMatching('Empty group match-count',  '((?=.*(?:\2|a)(.))|$){1,5}', '1234567890abcdefghi',   [1,0,  1,0,  16,1]);
+
+  IsMatching('Empty group match-count',  '((?=.*(?:\2|a)(.))|$){1,4}?', '1234567890abcdefghi',   [1,0,  1,0,  12,1]);
+  IsMatching('Empty group match-count',  '((?=.*(?:\2|a)(.))|$){1,5}?', '1234567890abcdefghi',   [1,0,  1,0,  12,1]);
+
+  IsMatching('Empty group match-count',  '((?=.*(?:\2|a)(.))|$)+', '1234567890abcdefghi',   [1,0,  1,0,  12,1]);
+  IsMatching('Empty group match-count',  '((?=.*(?:\2|a)(.))|$)+?', '1234567890abcdefghi',   [1,0,  1,0,  12,1]);
+  IsMatching('Empty group match-count',  '((?=.*(?:\2|a)(.))|$)*', '1234567890abcdefghi',   [1,0,  1,0,  12,1]);
+
+  IsMatching('Empty group match-count',  '((?=.*(?:\2|a)(.))|$)*?', '1234567890abcdefghi',   [1,0,  -1,-1,  -1,-1]);
+
+
+end;
+
+procedure TTestRegexpr.TestBranches;
+
+  const
+    MAX_A =  5*32 -1;
+    MAX_B = 14 + 4;
+  function BArg(Base: string; a, b: Integer; out L: integer): string;
+  var
+    OBase: String;
+  begin
+    L := 1;
+    OBase := Base;
+    if (a and  1) <> 0 then Base := '[' +Base+']';
+    if (a and  2) <> 0 then Base := Base+'+';
+    if (a and  4) <> 0 then
+      if (a and  2) <> 0 then Base := '(?>X|' +Base+ ')'  // already has a quantifier +
+      else Base := Base+ '{1,9}';
+
+    if (a and   8) <> 0 then Base := Base+ '(?>.){0,0}+';
+    if (a and  16) <> 0 then Base := '\b' + Base;
+    case a and (not 31) of
+      0 *32: Result := Base;
+      1 *32: Result := '(?='+Base+').';
+      2 *32: Result := '(?='+Base+')'+Base;
+      3 *32: begin
+          Result := '(?='+Base+')';     // zero len
+          L := 0;
+        end;
+      4 *32: begin
+          Result := '(?='+Base+')\b';     // zero len
+          L := 0;
+        end;
+    end;
+
+    case b mod 14 of
+       0: ;
+       1: Result := '\K' + Result;
+       2: Result := '(?=\b)' + Result;
+       3: Result := '(?=\w)' + Result;
+       4: Result := '(?=X)?' + Result;
+       5: Result := '(?!X)' + Result;
+       6: Result := '(?!X)?' + Result;
+       7: Result := '(?!'+OBase+')?' + Result;
+       8: Result := '(?<=\b)' + Result;
+       9: Result := '(?<=\b)?' + Result;
+      10: Result := '(?<!\B)?' + Result;
+      11: Result := '\b?' + Result;
+      12: Result := '(?>)' + Result;
+      13: Result := '(?>(?<=\b)|X){0,9}' + Result;
+    end;
+    if b > 13 then Result := '(?:X|' +Result+ ')+';
+  end;
+
+var
+  Lead: Integer;
+  a1, a2, b1, b2: integer;
+  L1, L2: Integer;
+  sLead, sB1, sB2: RegExprString;
+begin
+  (* Hide the canditate for (each) branch, in all and any surrounding expressions
+     Make sure it still matches
+     - must NOT be missing in FirstChar
+     - must NOT be missing GBranch (if GBranch is used)
+
+     This test does not assert that
+     - FirstChar does not have unwanted extra (that does not invalidate the result)
+     - GBranch is used whenever possible, only that if it happens to be used, it works
+  *)
+  for Lead := 0 to 1 do
+  for a1 := 0 to MAX_A do
+  for b1 := 0 to MAX_B do
+  for a2 := 0 to 1 do
+  for b2 := 1 to 2 do
+  begin
+    sLead := '';
+    if Lead = 1 then sLead := ' ';
+
+    sB1 := BArg('a', a1, b1, L1);
+    sB2 := BArg('b', a2*32, b2, L2);
+
+    IsMatching('branch ', sB1+'|'+sB2,  sLead+'a',  [1+Lead, L1  ]);
+    IsMatching('branch ', sB2+'|'+sB1,  sLead+'a',  [1+Lead, L1  ]);
+    IsMatching('branch ', sB1+'|'+sB2,  sLead+'b',  [1+Lead, L2  ]);
+    IsMatching('branch ', sB2+'|'+sB1,  sLead+'ba',  [1+Lead, L2  ]);
+    IsMatching('branch ', '('+sB1+'|'+sB2+')',  sLead+'aba',  [1+Lead, L1,   1+Lead, L1]);
+
+    IsMatching('branch ', '[d-m]|'+sB1+'|'+sB2,  sLead+'a',  [1+Lead, L1  ]);
+    IsMatching('branch ', sB1+'|[d-m]|'+sB2,     sLead+'a',  [1+Lead, L1  ]);
+    IsMatching('branch ', sB1+'|'+sB2+'|[d-m]',  sLead+'a',  [1+Lead, L1  ]);
+  end;
+
+  IsNotMatching('branch ', '(?:(?=[abc])|d)+c|e',  '.a');
+  IsMatching('branch ', '(?:(?=[abc])|d)+c|e',  '.c',  [2, 1  ]);
+  IsMatching('branch ', '(?:(?=[abc])|d)+c|e',  '.dc',  [2, 2  ]);
+  IsMatching('branch ', '(?:(?=[abc])|d)+c|e',  '.ec',  [2, 1  ]);
+
+
+  IsMatching('branch ', '(?:a+b)|c',  '.ab',  [2, 2 ]);
+  IsMatching('branch ', '(?:a+b)|c',  '.c',   [2, 1 ]);
 end;
 
 procedure TTestRegexpr.TestReferences;
@@ -1373,6 +1818,34 @@ begin
   IsMatching('Valid call idx', '(.)(.)(?2)',  'aABBC',  [1,3,  1,1, 2,1]);
   TestBadRegex('Invalid call idx', '(.)(.)(?3)');
 
+  IsMatching('ref in branch', '((A)|B|C\2)*',  'AACACB',  [1,4,  3,2, 2,1]);
+  IsMatching('ref in call', '[^A]*((A)|B|C\2)*',  'DAACACBE',  [1,5,  4,2, 3,1]);
+
+
+  IsMatching('ref in branch', '(...).\1',  'abcxabc',  [1,7,  1,3]);
+  IsNotMatching('ref in branch', '(...).\1',  'abcxab');
+  CompileRE('(...).\1');
+  RE.SetInputSubString('abcxabc', 1,7);
+  IsTrue('Matches on full string', RE.Exec);
+  CompileRE('(...).\1');
+  RE.SetInputSubString('abcxabc', 1,6);
+  IsFalse('Does NOT match on short string', RE.Exec);
+
+  (* ECMA does have diff results - as it can match \1 when the first capture had not yet been executed *)
+
+  IsMatching('nested ref', '(?i)^(.(?:(\1)|(.)))*',  'aAaaAa',  [1,5,  3,3, 4,2, 2,1]);
+  IsMatching('nested ref', '^.*(.(?:(\1)|(.))){2,2}x(\2)',  'aaaaaxaa',  [1,8,  3,3, 4,2, 2,1, 7,2]);
+  IsMatching('nested ref', '^(?:(.(?:(\1)|(.))){2,2}x(\2))+',  'aaaaaxaaaaaaxa',   [1,8 ,  3,3, 4,2, 2,1, 7,2]);
+  IsMatching('nested ref', '^(?:(.(?:(\1)|(.))){2,2}x(\2)){2,2}',  'aaaaaxaaaaaaaaxaaaa',
+             [1,18 ,  13,2, 10,3, 14,1, 16,3]);
+  IsMatching('nested ref', '^(?:(.(?:(\1)|(.))){2,2}x(\2))+',  'aaaaaxaaaaaaaaxaaaa',
+             [1,18 ,  13,2, 10,3, 14,1, 16,3]);
+
+  IsMatching('loop ref', '^(?:a*(a+x)\1+)',  'aaaaaxaaaxaaaxaaaxaa',  [1,18,  3,4]);
+  IsMatching('loop ref', '^(?:a*(a+x)\1)+',  'aaaaaxaaaxaaaxaaaxaa',  [1,18,  11,4]);
+
+  IsMatching('nested ref', '^(?:(.(?:(\1)|(.))){2,2}x(\2))+',  'aaaaaxaaaaaaxaa',  [1,15,  11,2,  4,2, 12,1, 14,2]);
+  IsMatching('nested ref', '^(?:(.(?:(\1)|(.))){2,2}x(\2))+',  'aaaaaxaaaaaaaxaa', [1,16,  11,3, 12,2, 10,1, 15,2]);
 end;
 
 procedure TTestRegexpr.TestSubCall;
@@ -1392,6 +1865,9 @@ begin
   IsMatching('nested call to outer', '(1(2(3(?1)?))A)_((?3))',  '123A_3123',  [1,6,  1,4, 2,2, 3,1, 6,1]);
   IsMatching('nested call to outer', '(1(2(3(?1)?))A)_((?3))',  '123A_3123A',  [1,10,  1,4, 2,2, 3,1, 6,5]);
 
+  IsMatching('ref in branch', '((A)|B|C(?2))*',  'AACACB',  [1,4,  3,2, 2,1]);
+  IsMatching('ref in branch', '[^A]*((A)|B|C(?2))*',  'DAACACBE',  [1,5,  4,2, 3,1]);
+  IsMatching('ref in branch', '((A)|B|C(?2))+',  'AACB',  [1,2,  2,1, 2,1]);
 end;
 
 procedure TTestRegexpr.TestNamedGroups;
@@ -1510,6 +1986,34 @@ begin
 
 end;
 
+procedure TTestRegexpr.TestCaptures;
+begin
+  IsMatching('simple capture', '(a)',    'abc',  [1,1,  1,1]);
+  IsMatching('simple capture', '(b)',    'abc',  [2,1,  2,1]);
+  IsMatching('simple capture', '(c)',    'abc',  [3,1,  3,1]);
+  IsMatching('simple capture .', '(.)',  'abc',  [1,1,  1,1]);
+
+  IsMatching('capture optional content',    '(d?)',  'abc',  [1,0,  1,0]);
+  IsMatching('optional capture not found',  '(d)?',  'abc',  [1,0,  -1,-1]);
+  IsMatching('optional capture found',      '(a)?',  'abc',  [1,1,  1,1]);
+
+  IsMatching('zero width capture', '(^)',    'abc',  [1,0,  1,0]);
+  IsMatching('zero width capture', '($)',    'abc',  [4,0,  4,0]);
+  IsMatching('zero width capture', '(\b)',   'abc',  [1,0,  1,0]);
+  IsMatching('zero width capture', '(\b).',  'abc',  [1,1,  1,0]);
+
+  IsMatching('backtracking', '(ad)',  'abcade',  [4,2,  4,2]);
+  IsMatching('backtracking', '^.*(a)',   'abcade',  [1,4,  4,1]);
+  IsMatching('backtracking', '^.*(a)b',  'abcade',  [1,2,  1,1]);
+  IsMatching('backtracking', '^.*(ab)',   'abcade',  [1,2,  1,2]);
+
+  IsMatching('backtracking', '(ad)*',  'adadae',  [1,4,  3,2]);
+
+  IsMatching('backtracking many', '^.*(a).(b)c',  'a.bda.bc',     [1,8,  5,1, 7,1]);
+  IsMatching('backtracking many', '^.*?(a).(b)c',  'a.bda.bc',    [1,8,  5,1, 7,1]);
+  IsMatching('backtracking many', '^.*?(a).*?(b)c',  'a.bda.bc',  [1,8,  1,1, 7,1]);
+end;
+
 procedure TTestRegexpr.TestRecurseAndCaptures;
 begin
   // recurse capture "B", but outer does not capture
@@ -1534,6 +2038,9 @@ begin
              'aABBcAXBc',  [2,3,  -1,-1,  3,1,  -1,-1]);
 
 
+  IsMatching('Recursive', '^(?''A''(?:...?)(?:x|(?&A)))', 'aaaaaaaax',   [1,9,   1,9]);
+  IsMatching('Recursive', '^(?''A''(?:...?)(?:x|(?&A)))', 'aaaaaaaaax',  [1,10,  1,10]);
+  //IsMatching('Recursive', '^(?''A''(?:b[^b]+(?&A)?x+))', 'baaabaaaaaxx', [1,12,  1,12]);
 end;
 
 procedure TTestRegexpr.TestIsFixedLength;
@@ -1668,7 +2175,9 @@ begin
   HasVarLenLookBehind('', '()A(?<=.(?<=(?1)))');
   HasVarLenLookBehind('', '()()()()A(?<=.(?<=(?4)))');
   HasVarLenLookBehind('', '()A(?<=.(?<=(?R)))');
+  {$IFDEF FastUnicodeData}
   HasFixedLookBehind ('', '()A(?<=.(?<=\p{Lu}))');
+  {$ENDIF}
   HasFixedLookBehind ('', '()A(?<=.(?<=[a-x]))');
 
 end;
@@ -1775,6 +2284,14 @@ begin
     end;
   end;
 
+
+  CompileRE('$');
+  RE.SetInputSubString('abcxabc', 1,7);
+  IsTrue('Matches on full string', RE.Exec);
+
+  CompileRE('$');
+  RE.SetInputSubString('abcxabc', 2,3);
+  IsTrue('Matches on sub-string', RE.Exec);
 
 end;
 
@@ -2099,6 +2616,62 @@ begin
   IsMatching('Three Neg-Ahead found before/after/nested-var-len',
                 '(?!a)[aA](?!.2)(?!(?!.{0,4}9).3)',    '_aB3_AB2_AB38_AB39_A_3_',  [15,1]);
 
+  // Test success without OP_LOOKAHEAD_END reached
+  IsMatching('look-ahead (opt) in branch',     '^.(?:a|.(?=2)?|b)',    '.xb9',  [1,2]);
+  IsMatching('look-ahead-neg (opt) in branch', '^.(?:a|.(?!.)?|b)',    '.xb9',  [1,2]);
+  IsMatching('look-ahead-neg in branch',       '^.(?:a|.(?!Y)|b)',     '.xb9',  [1,2]);
+
+  // first char
+  IsMatching('',       'a*(?=[bc])[cd]',     'aacd',  [1,3]);
+
+
+  // possesive optional lookahead
+  // ?+
+  IsMatching('look-ahead-poss-opt ? ', '^(.*?)1(?=(2))?.*x1(?!\2)',   '.12...1a...x12',  [1,13, 1,1, -1,-1]);
+  IsMatching('look-ahead-poss-opt ?+', '^(.*?)1(?=(2))?+.*x1(?!\2)',  '.12...1a...x12',  [1,13, 1,6, -1,-1]);
+  // *+
+  IsMatching('look-ahead-poss-opt * ', '^(.*?)1(?=(2))*.*x1(?!\2)',   '.12...1a...x12',  [1,13, 1,1, -1,-1]);
+  IsMatching('look-ahead-poss-opt *+', '^(.*?)1(?=(2))*+.*x1(?!\2)',  '.12...1a...x12',  [1,13, 1,6, -1,-1]);
+  // {0,1}+
+  IsMatching('look-ahead-poss-opt {0,1} ', '^(.*?)1(?=(2)){0,1}.*x1(?!\2)',   '.12...1a...x12',  [1,13, 1,1, -1,-1]);
+  IsMatching('look-ahead-poss-opt {0,1}+', '^(.*?)1(?=(2)){0,1}+.*x1(?!\2)',  '.12...1a...x12',  [1,13, 1,6, -1,-1]);
+  // {0,0}+ // no diff
+  IsMatching('look-ahead-poss-opt {0,0} ', '^(.*?)1(?=(2)){0,0}.*x1(?!\2)',  '.12...1a...x12',  [1,13, 1,1, -1,-1]);
+  IsMatching('look-ahead-poss-opt {0,0}+', '^(.*?)1(?=(2)){0,0}+.*x1(?!\2)',  '.12...1a...x12',  [1,13, 1,1, -1,-1]);
+  // {1,1}+ // no diff
+  IsNotMatching('look-ahead-poss-opt {1,1} ', '^(.*?)1(?=(2)){1,1}.*x1(?!\2)',  '.12...1a...x12');
+  IsNotMatching('look-ahead-poss-opt {1,1}+', '^(.*?)1(?=(2)){1,1}+.*x1(?!\2)',  '.12...1a...x12');
+
+  // greedy vs non greedy
+  // ? vs ??
+  IsMatching('look-ahead-opt-ng 1', '^(.*?)1(?=(2))?.*x1(?=\2)?',   '.12...1a...x12',  [1,13, 1,1, 3,1]);
+  IsMatching('look-ahead-opt-ng 2', '^(.*?)1(?=(2))??.*x1(?=\2)?',   '.12...1a...x12',  [1,13, 1,1, -1,-1]);
+  IsMatching('look-ahead-opt-ng 3', '^(.*?)1(?=(2))??.*x1(?=\2)',   '.12...1a...x12',  [1,13, 1,1, 3,1]);
+  // * vs *?
+  IsMatching('look-ahead-opt-ng 1', '^(.*?)1(?=(2))*.*x1(?=\2)?',   '.12...1a...x12',  [1,13, 1,1, 3,1]);
+  IsMatching('look-ahead-opt-ng 2', '^(.*?)1(?=(2))*?.*x1(?=\2)?',   '.12...1a...x12',  [1,13, 1,1, -1,-1]);
+  IsMatching('look-ahead-opt-ng 3', '^(.*?)1(?=(2))*?.*x1(?=\2)',   '.12...1a...x12',  [1,13, 1,1, 3,1]);
+  // {0,1} vs {0,1}?
+  IsMatching('look-ahead-opt-ng 1', '^(.*?)1(?=(2)){0,1}.*x1(?=\2)?',   '.12...1a...x12',  [1,13, 1,1, 3,1]);
+  IsMatching('look-ahead-opt-ng 2', '^(.*?)1(?=(2)){0,1}?.*x1(?=\2)?',   '.12...1a...x12',  [1,13, 1,1, -1,-1]);
+  IsMatching('look-ahead-opt-ng 3', '^(.*?)1(?=(2)){0,1}?.*x1(?=\2)',   '.12...1a...x12',  [1,13, 1,1, 3,1]);
+
+
+  // PCRE-2 will apply a look ahead several times...
+  IsMatching('look-ahead match-count',  '(?=(?=.*(?:\1|a)(.))|$){1,3}', '1234567890abcdefghi',   [1,0,  14,1]);
+  IsMatching('look-ahead match-count',  '(?=(?=.*(?:\1|a)(.))|$){1,4}', '1234567890abcdefghi',   [1,0,  15,1]);
+  IsMatching('look-ahead match-count',  '(?=(?=.*(?:\1|a)(.))|$){1,4}?', '1234567890abcdefghi',   [1,0,  12,1]);
+  IsMatching('look-ahead match-count',  '(?=(?=.*(?:\1|a)(.))|$){2,4}?', '1234567890abcdefghi',   [1,0,  13,1]);
+
+  IsMatching('look-ahead match-count',  '(?=(?:.*(?:\1|a)(.))|$){1,3}', '1234567890abcdefghi',   [1,0,  14,1]);
+  IsMatching('look-ahead match-count',  '(?=(?:.*(?:\1|a)(.))|$){1,4}', '1234567890abcdefghi',   [1,0,  15,1]);
+  IsMatching('look-ahead match-count',  '(?=(?:.*(?:\1|a)(.))|$){1,4}?', '1234567890abcdefghi',   [1,0,  12,1]);
+  IsMatching('look-ahead match-count',  '(?=(?:.*(?:\1|a)(.))|$){2,4}?', '1234567890abcdefghi',   [1,0,  13,1]);
+
+  // Neg look ahead
+  // ? vs ??
+  IsMatching('NEG look-ahead-opt-ng 1', '^.1((?!(?1))??)',   '.12.',  [1,2, 3,0]);
+//  IsErrorOnMatch('NEG look-ahead-opt-g (recurse)', '^.1((?!(?1))?)',   '.12.'); // OP_SUBCALL does not give error on endless recursion
 end;
 
 procedure TTestRegexpr.TestRegLookBehind;
@@ -2358,6 +2931,50 @@ begin
   IsMatching('',  '(?<=.A...)(X)',  '_A123X3',              [6,1,   6,1], 2);
   IsMatching('',  '(?<=.A...)(X)',  '_A123X3',              [6,1,   6,1], 3);
 
+  // Test success without OP_LOOKBEHIND_END reached
+  IsMatching('look-behind (opt) in branch',     '^.(?:a|.(?<=Y)?|b)',    '.xb9',  [1,2]);
+  IsMatching('look-behind-neg (opt) in branch', '^.(?:a|.(?<!.)?|b)',    '.xb9',  [1,2]);
+  IsMatching('look-behind-neg in branch',       '^.(?:a|.(?<!Y)|b)',     '.xb9',  [1,2]);
+
+  // possesive optional lookahead
+  // ?+
+  IsMatching('look-behind-poss-opt ?',  '^(.*?)1.(?<=(2))?.*x1(?!\2)',   '.12...1a...x12',  [1,13, 1,1, -1,-1]);
+  IsMatching('look-behind-poss-opt ??', '^(.*?)1.(?<=(2))?+.*x1(?!\2)',  '.12...1a...x12',  [1,13, 1,6, -1,-1]);
+  // *+
+  IsMatching('look-behind-poss-opt *',  '^(.*?)1.(?<=(2))*.*x1(?!\2)',   '.12...1a...x12',  [1,13, 1,1, -1,-1]);
+  IsMatching('look-behind-poss-opt *?', '^(.*?)1.(?<=(2))*+.*x1(?!\2)',  '.12...1a...x12',  [1,13, 1,6, -1,-1]);
+  // {0,1}+
+  IsMatching('look-behind-poss-opt {0,1}',  '^(.*?)1.(?<=(2)){0,1}.*x1(?!\2)',   '.12...1a...x12',  [1,13, 1,1, -1,-1]);
+  IsMatching('look-behind-poss-opt {0,1}+', '^(.*?)1.(?<=(2)){0,1}+.*x1(?!\2)',  '.12...1a...x12',  [1,13, 1,6, -1,-1]);
+  // {0,0}+ // no diff
+  IsMatching('look-ahead-poss-opt {0,0} ', '^(.*?)1.(?<=(2)){0,0}.*x1(?!\2)',  '.12...1a...x12',  [1,13, 1,1, -1,-1]);
+  IsMatching('look-ahead-poss-opt {0,0}+', '^(.*?)1.(?<=(2)){0,0}+.*x1(?!\2)',  '.12...1a...x12',  [1,13, 1,1, -1,-1]);
+  // {1,1}+ // no diff
+  IsNotMatching('look-ahead-poss-opt {1,1} ', '^(.*?)1.(?<=(2)){1,1}.*x1(?!\2)',  '.12...1a...x12');
+  IsNotMatching('look-ahead-poss-opt {1,1}+', '^(.*?)1.(?<=(2)){1,1}+.*x1(?!\2)',  '.12...1a...x12');
+
+  // greedy vs non greedy
+  // ? vs ??
+  IsMatching('look-ahead-opt-ng ? 1', '^(.*?)1.(?<=(2))?.*x1(?=\2)?',   '.12...1a...x12',  [1,13, 1,1, 3,1]);
+  IsMatching('look-ahead-opt-ng ? 2', '^(.*?)1.(?<=(2))??.*x1(?=\2)?',   '.12...1a...x12',  [1,13, 1,1, -1,-1]);
+  IsMatching('look-ahead-opt-ng ? 3', '^(.*?)1.(?<=(2))??.*x1(?=\2)',   '.12...1a...x12',  [1,13, 1,1, 3,1]);
+  // * vs *?
+  IsMatching('look-ahead-opt-ng * 1', '^(.*?)1.(?<=(2))*.*x1(?=\2)?',   '.12...1a...x12',  [1,13, 1,1, 3,1]);
+  IsMatching('look-ahead-opt-ng * 2', '^(.*?)1.(?<=(2))*?.*x1(?=\2)?',   '.12...1a...x12',  [1,13, 1,1, -1,-1]);
+  IsMatching('look-ahead-opt-ng * 3', '^(.*?)1.(?<=(2))*?.*x1(?=\2)',   '.12...1a...x12',  [1,13, 1,1, 3,1]);
+  // {0,1} vs {0,1}?
+  IsMatching('look-ahead-opt-ng {} 1', '^(.*?)1.(?<=(2)){0,1}.*x1(?=\2)?',   '.12...1a...x12',  [1,13, 1,1, 3,1]);
+  IsMatching('look-ahead-opt-ng {} 2', '^(.*?)1.(?<=(2)){0,1}?.*x1(?=\2)?',   '.12...1a...x12',  [1,13, 1,1, -1,-1]);
+  IsMatching('look-ahead-opt-ng {} 3', '^(.*?)1.(?<=(2)){0,1}?.*x1(?=\2)',   '.12...1a...x12',  [1,13, 1,1, 3,1]);
+
+  // PCRE-2 will apply a look ahead several times...
+  IsMatching('look-behind match-count',  '(?<=(?=.*(?:\1|a)(.))|$){1,3}', '1234567890abcdefghi',   [1,0,  14,1]);
+  IsMatching('look-behind match-count',  '(?<=(?=.*(?:\1|a)(.))|$){1,4}', '1234567890abcdefghi',   [1,0,  15,1]);
+  IsMatching('look-behind match-count',  '(?<=(?=.*(?:\1|a)(.))|$){1,4}?', '1234567890abcdefghi',   [1,0,  12,1]);
+  IsMatching('look-behind match-count',  '(?<=(?=.*(?:\1|a)(.))|$){2,4}?', '1234567890abcdefghi',   [1,0,  13,1]);
+
+
+  IsMatching('look-behind op-star',  '^aa(?<=^(a*))', 'aaaaaa',   [1,2,  1,2]);
 end;
 
 procedure TTestRegexpr.TestRegLookAroundMixed;
@@ -2377,6 +2994,202 @@ begin
                 '(?<=^(?=.*$).*)B',        '_A_1_B_AxyzB123_A_',     [6,1]);
 
   IsNotMatching('behind not found before "A=2" for dot', '(?=A).(?<=2)',    'A2AB34AB_');
+
+end;
+
+procedure TTestRegexpr.TestResetMatchPos;
+begin
+  IsMatching('Set Matchstart middle',          'a\Kb',  'ab',    [2,1]);
+  IsMatching('Set Matchstart end of match',    'a\K',   'ab',    [2,0]);
+  IsMatching('Set Matchstart begin of match',  '\Ka',   'ab',    [1,1]);
+  IsMatching('Set Matchstart stand-alone',     '\K',    'ab',    [1,0]);
+
+  IsMatching('Set Matchstart middle',          'a\Kb',  'xab',    [3,1]);
+  IsMatching('Set Matchstart end of match',    'a\K',   'xab',    [3,0]);
+  IsMatching('Set Matchstart begin of match',  '\Ka',   'xab',    [2,1]);
+  IsMatching('Set Matchstart stand-alone',     '\K',    'xab',    [1,0]);
+  IsMatching('Set Matchstart stand-alone with offset',  '\K',    'xabde',    [3,0], 3);
+
+  IsMatching('Set Matchstart EOL',     '$\K',    'xab',    [4,0]);
+  IsMatching('Set Matchstart EOL',     '\K$',    'xab',    [4,0]);
+
+
+  IsMatching('backtracking',     '(?:.\K)*?b',    'xabc',    [3,1]);
+  IsMatching('backtracking',     '(?:.\K)*b',     'xabc',    [3,1]);
+
+
+  IsMatching('backtracking',     '^(?=.*\Kx)?.*c',    'abcd',    [1,3]);
+  IsMatching('backtracking',     '^(?=\K.*x)?.*c',    'abcd',    [1,3]);
+  IsMatching('backtracking',     '^(?:.*\Kx)?.*c',    'abcd',    [1,3]);
+  IsMatching('backtracking',     '^(?:\K.*x)?.*c',    'abcd',    [1,3]);
+
+  IsMatching('multiple \K',     '^a\Kb\Kc',    'abcd',    [3,1]);
+
+  IsNotMatching('lookahead not possible',   '^(?=.*\K).*c',    'abcd');
+  IsMatching('lookahead',   '^(?=.\K).*c',    'abcd',    [2,2]);
+  IsMatching('lookbehind',  '(?<=\K.)c',    'abcd',    [2,2]);
+
+end;
+
+procedure TTestRegexpr.TestMultiLine;
+begin
+  IsMatching('dummy', '.',  '.',    [1,1]); // Make sure RE is created
+
+  RE.ModifierS := True;
+  IsMatching('S: char',        '.a',  'bbxabb',         [3,2]);
+  IsMatching('S: tab',         '.a',  'bb'#09'abb',     [3,2]); // tab
+  IsMatching('S: lf',          '.a',  'bb'#10'abb',     [3,2]); // line feed
+  IsMatching('S: vt',          '.a',  'bb'#11'abb',     [3,2]); // vertical tab
+  IsMatching('S: bp',          '.a',  'bb'#12'abb',     [3,2]); // page break
+  IsMatching('S: cr',          '.a',  'bb'#13'abb',     [3,2]); // carriage return
+  IsMatching('S: 14',          '.a',  'bb'#14'abb',     [3,2]);
+  IsMatching('S: crlf',        '.a',  'bb'#13#10'abb',  [4,2]);
+  IsMatching('S: lfcr',        '.a',  'bb'#10#13'abb',  [4,2]);
+
+  IsMatching('S: late -s: char',        '.(?-s)a',  'bbxabb',         [3,2]);
+  IsMatching('S: late -s: tab',         '.(?-s)a',  'bb'#09'abb',     [3,2]); // tab
+  IsMatching('S: late -s: lf',          '.(?-s)a',  'bb'#10'abb',     [3,2]); // line feed
+  IsMatching('S: late -s: vt',          '.(?-s)a',  'bb'#11'abb',     [3,2]); // vertical tab
+  IsMatching('S: late -s: bp',          '.(?-s)a',  'bb'#12'abb',     [3,2]); // page break
+  IsMatching('S: late -s: cr',          '.(?-s)a',  'bb'#13'abb',     [3,2]); // carriage return
+  IsMatching('S: late -s: 14',          '.(?-s)a',  'bb'#14'abb',     [3,2]);
+  IsMatching('S: late -s: crlf',        '.(?-s)a',  'bb'#13#10'abb',  [4,2]);
+  IsMatching('S: late -s: lfcr',        '.(?-s)a',  'bb'#10#13'abb',  [4,2]);
+
+  IsMatching('S: late -s: char',        '.(?-s:a)',  'bbxabb',         [3,2]);
+  IsMatching('S: late -s: tab',         '.(?-s:a)',  'bb'#09'abb',     [3,2]); // tab
+  IsMatching('S: late -s: lf',          '.(?-s:a)',  'bb'#10'abb',     [3,2]); // line feed
+  IsMatching('S: late -s: vt',          '.(?-s:a)',  'bb'#11'abb',     [3,2]); // vertical tab
+  IsMatching('S: late -s: bp',          '.(?-s:a)',  'bb'#12'abb',     [3,2]); // page break
+  IsMatching('S: late -s: cr',          '.(?-s:a)',  'bb'#13'abb',     [3,2]); // carriage return
+  IsMatching('S: late -s: 14',          '.(?-s:a)',  'bb'#14'abb',     [3,2]);
+  IsMatching('S: late -s: crlf',        '.(?-s:a)',  'bb'#13#10'abb',  [4,2]);
+  IsMatching('S: late -s: lfcr',        '.(?-s:a)',  'bb'#10#13'abb',  [4,2]);
+
+  IsMatching   ('S: -s char',         '(?-s).a',  'bbxabb',     [3,2]);
+  IsMatching   ('S: -s tab',          '(?-s).a',  'bb'#09'abb', [3,2]);
+  IsMatching   ('S: -s 14',           '(?-s).a',  'bb'#14'abb', [3,2]);
+  IsNotMatching('S: -s lf',           '(?-s).a',  'bb'#10'abb');
+  IsNotMatching('S: -s vt',           '(?-s).a',  'bb'#11'abb');
+  IsNotMatching('S: -s bp',           '(?-s).a',  'bb'#12'abb');
+  IsNotMatching('S: -s cr',           '(?-s).a',  'bb'#13'abb');
+  IsNotMatching('S: -s crlf',         '(?-s).a',  'bb'#13#10'abb');
+  IsNotMatching('S: -s lfcr',         '(?-s).a',  'bb'#10#13'abb');
+
+  IsMatching   ('S: -s char',         '(?-s:.)a',  'bbxabb',     [3,2]);
+  IsMatching   ('S: -s tab',          '(?-s:.)a',  'bb'#09'abb', [3,2]);
+  IsMatching   ('S: -s 14',           '(?-s:.)a',  'bb'#14'abb', [3,2]);
+  IsNotMatching('S: -s lf',           '(?-s:.)a',  'bb'#10'abb');
+  IsNotMatching('S: -s vt',           '(?-s:.)a',  'bb'#11'abb');
+  IsNotMatching('S: -s bp',           '(?-s:.)a',  'bb'#12'abb');
+  IsNotMatching('S: -s cr',           '(?-s:.)a',  'bb'#13'abb');
+  IsNotMatching('S: -s crlf',         '(?-s:.)a',  'bb'#13#10'abb');
+  IsNotMatching('S: -s lfcr',         '(?-s:.)a',  'bb'#10#13'abb');
+
+  IsMatching   ('S: two -s char',      '(?s)(?-s:.)a',  'bbxabb',     [3,2]);
+  IsMatching   ('S: two -s tab',       '(?s)(?-s:.)a',  'bb'#09'abb', [3,2]);
+  IsMatching   ('S: two -s 14',        '(?s)(?-s:.)a',  'bb'#14'abb', [3,2]);
+  IsNotMatching('S: two -s lf',        '(?s)(?-s:.)a',  'bb'#10'abb');
+  IsNotMatching('S: two -s vt',        '(?s)(?-s:.)a',  'bb'#11'abb');
+  IsNotMatching('S: two -s bp',        '(?s)(?-s:.)a',  'bb'#12'abb');
+  IsNotMatching('S: two -s cr',        '(?s)(?-s:.)a',  'bb'#13'abb');
+  IsNotMatching('S: two -s crlf',      '(?s)(?-s:.)a',  'bb'#13#10'abb');
+  IsNotMatching('S: two -s lfcr',      '(?s)(?-s:.)a',  'bb'#10#13'abb');
+
+  IsMatching('S: two -s char',      '(?-s)(?s:.)a',  'bbxabb',        [3,2]);
+  IsMatching('S: two -s tab',       '(?-s)(?s:.)a',  'bb'#09'abb',    [3,2]);
+  IsMatching('S: two -s 14',        '(?-s)(?s:.)a',  'bb'#14'abb',    [3,2]);
+  IsMatching('S: two -s lf',        '(?-s)(?s:.)a',  'bb'#10'abb',    [3,2]);
+  IsMatching('S: two -s vt',        '(?-s)(?s:.)a',  'bb'#11'abb',    [3,2]);
+  IsMatching('S: two -s bp',        '(?-s)(?s:.)a',  'bb'#12'abb',    [3,2]);
+  IsMatching('S: two -s cr',        '(?-s)(?s:.)a',  'bb'#13'abb',    [3,2]);
+  IsMatching('S: two -s crlf',      '(?-s)(?s:.)a',  'bb'#13#10'abb', [4,2]);
+  IsMatching('S: two -s lfcr',      '(?-s)(?s:.)a',  'bb'#10#13'abb', [4,2]);
+
+
+
+  RE.ModifierS := False;
+  IsMatching   ('M: char',         '.a',  'bbxabb',        [3,2]);
+  IsMatching   ('M: tab',          '.a',  'bb'#09'abb',    [3,2]);
+  IsMatching   ('M: 14',           '.a',  'bb'#14'abb',    [3,2]);
+  IsNotMatching('M: lf',           '.a',  'bb'#10'abb');
+  IsNotMatching('M: vt',           '.a',  'bb'#11'abb');
+  IsNotMatching('M: bp',           '.a',  'bb'#12'abb');
+  IsNotMatching('M: cr',           '.a',  'bb'#13'abb');
+  IsNotMatching('M: crlf',         '.a',  'bb'#13#10'abb');
+  IsNotMatching('M: lfcr',         '.a',  'bb'#10#13'abb');
+
+  IsMatching   ('M: late +s char',         '.(?s)a',  'bbxabb',        [3,2]);
+  IsMatching   ('M: late +s tab',          '.(?s)a',  'bb'#09'abb',    [3,2]);
+  IsMatching   ('M: late +s 14',           '.(?s)a',  'bb'#14'abb',    [3,2]);
+  IsNotMatching('M: late +s lf',           '.(?s)a',  'bb'#10'abb');
+  IsNotMatching('M: late +s vt',           '.(?s)a',  'bb'#11'abb');
+  IsNotMatching('M: late +s bp',           '.(?s)a',  'bb'#12'abb');
+  IsNotMatching('M: late +s cr',           '.(?s)a',  'bb'#13'abb');
+  IsNotMatching('M: late +s crlf',         '.(?s)a',  'bb'#13#10'abb');
+  IsNotMatching('M: late +s lfcr',         '.(?s)a',  'bb'#10#13'abb');
+
+  IsMatching('M: +s: char',        '(?s).a',  'bbxabb',         [3,2]);
+  IsMatching('M: +s: tab',         '(?s).a',  'bb'#09'abb',     [3,2]); // tab
+  IsMatching('M: +s: lf',          '(?s).a',  'bb'#10'abb',     [3,2]); // line feed
+  IsMatching('M: +s: vt',          '(?s).a',  'bb'#11'abb',     [3,2]); // vertical tab
+  IsMatching('M: +s: bp',          '(?s).a',  'bb'#12'abb',     [3,2]); // page break
+  IsMatching('M: +s: cr',          '(?s).a',  'bb'#13'abb',     [3,2]); // carriage return
+  IsMatching('M: +s: 14',          '(?s).a',  'bb'#14'abb',     [3,2]);
+  IsMatching('M: +s: crlf',        '(?s).a',  'bb'#13#10'abb',  [4,2]);
+  IsMatching('M: +s: lfcr',        '(?s).a',  'bb'#10#13'abb',  [4,2]);
+
+  IsMatching('M: +s: char',        '(?s:.a)',  'bbxabb',         [3,2]);
+  IsMatching('M: +s: tab',         '(?s:.a)',  'bb'#09'abb',     [3,2]); // tab
+  IsMatching('M: +s: lf',          '(?s:.a)',  'bb'#10'abb',     [3,2]); // line feed
+  IsMatching('M: +s: vt',          '(?s:.a)',  'bb'#11'abb',     [3,2]); // vertical tab
+  IsMatching('M: +s: bp',          '(?s:.a)',  'bb'#12'abb',     [3,2]); // page break
+  IsMatching('M: +s: cr',          '(?s:.a)',  'bb'#13'abb',     [3,2]); // carriage return
+  IsMatching('M: +s: 14',          '(?s:.a)',  'bb'#14'abb',     [3,2]);
+  IsMatching('M: +s: crlf',        '(?s:.a)',  'bb'#13#10'abb',  [4,2]);
+  IsMatching('M: +s: lfcr',        '(?s:.a)',  'bb'#10#13'abb',  [4,2]);
+
+
+  RE.ModifierS := True;
+  IsMatching   ('S:mixed tab',         '(?-s).(?s).a',  'bb'#09#09'abb',     [3,3]);
+  IsMatching   ('S:mixed tab',         '(?-s).(?s).a',  'bb'#09#10'abb',     [3,3]);
+  IsNotMatching('S:mixed tab',         '(?-s).(?s).a',  'bb'#10#09'abb');
+  IsNotMatching('S:mixed tab',         '(?-s).(?s).a',  'bb'#10#10'abb');
+
+  IsMatching   ('S:mixed tab',         '(?-s:.)(?s:.)a',  'bb'#09#09'abb',     [3,3]);
+  IsMatching   ('S:mixed tab',         '(?-s:.)(?s:.)a',  'bb'#09#10'abb',     [3,3]);
+  IsNotMatching('S:mixed tab',         '(?-s:.)(?s:.)a',  'bb'#10#09'abb');
+  IsNotMatching('S:mixed tab',         '(?-s:.)(?s:.)a',  'bb'#10#10'abb');
+
+  RE.ModifierS := False;
+  IsMatching   ('M:mixed tab',         '(?-s).(?s).a',  'bb'#09#09'abb',     [3,3]);
+  IsMatching   ('M:mixed tab',         '(?-s).(?s).a',  'bb'#09#10'abb',     [3,3]);
+  IsNotMatching('M:mixed tab',         '(?-s).(?s).a',  'bb'#10#09'abb');
+  IsNotMatching('M:mixed tab',         '(?-s).(?s).a',  'bb'#10#10'abb');
+
+  IsMatching   ('S:mixed tab',         '(?-s:.)(?s:.)a',  'bb'#09#09'abb',     [3,3]);
+  IsMatching   ('S:mixed tab',         '(?-s:.)(?s:.)a',  'bb'#09#10'abb',     [3,3]);
+  IsNotMatching('S:mixed tab',         '(?-s:.)(?s:.)a',  'bb'#10#09'abb');
+  IsNotMatching('S:mixed tab',         '(?-s:.)(?s:.)a',  'bb'#10#10'abb');
+
+  RE.ModifierS := True;
+  IsMatching   ('S:mixed tab',         '.*',  #09'bb'#09#09'abc',     [1,8]);
+
+  IsMatching   ('S:mixed tab',         '.+',  #09'bb'#09#09'abc',     [1,8]);
+  IsMatching   ('S:mixed tab',         '.+',  #10'bb'#10#10'abc',     [1,8]);
+
+  RE.ModifierS := False;
+  IsMatching   ('S:mixed tab',         '.*',  #10'bb'#10#10'abc',     [1,0]);
+
+  IsMatching   ('S:mixed tab',         '.+',  #09'bb'#09#09'abc',     [1,8]);
+  IsMatching   ('S:mixed tab',         '.+',  #10'bb'#10#10'abc',     [2,2]);
+  IsMatching   ('S:mixed tab',         '.+',  #13'bb'#13#13'abc',     [2,2]);
+  IsMatching   ('S:mixed tab',         '.+',  #13'bb'#10#13'abc',     [2,2]);
+  IsMatching   ('S:mixed tab',         '.+',  #13'bb'#13#10'abc',     [2,2]);
+
+  IsMatching   ('S:mixed tab',         '.{3,3}',  #13'bb'#10#13'abc',     [6,3]);
+  IsMatching   ('S:mixed tab',         '.{3,3}',  #13'bb'#13#10'abc',     [6,3]);
+  IsNotMatching   ('S:mixed tab',      '.{4,4}',  #13'bb'#13#10'abc');
 
 end;
 
@@ -2631,6 +3444,7 @@ begin
 end;
 
 {$IFDEF UnicodeRE}
+{$IFDEF FastUnicodeData}
 procedure TTestRegexpr.RunTest51unicode;
 begin
   RunRETest(51);
@@ -2657,6 +3471,7 @@ begin
   AreEqual('Search position', T.MatchStart, RE.MatchPos[0]);
   AreEqual('Matched text', PrintableString(T.ExpectedResult), PrintableString(RE.Match[0]));
 end;
+{$ENDIF}
 {$ENDIF}
 
 procedure TTestRegexpr.RunTest53;
@@ -2786,7 +3601,11 @@ begin
 end;
 
 procedure TTestRegexpr.CompileRE(const AExpression: RegExprString);
+{$IF NOT DEFINED(LineEnding)}
+const LineEnding = #13#10;
+{$IFEND}
 begin
+  FErrorInfo := LineEnding + AExpression;
   if (RE = Nil) then
   begin
     RE := TTestableRegExpr.Create;
@@ -2794,6 +3613,7 @@ begin
   end;
   RE.Expression := AExpression;
   RE.Compile;
+  FErrorInfo := LineEnding + AExpression + LineEnding + RE.Dump(2);
 {$IFDEF DUMPTESTS}
   writeln('  Modifiers "', RE.ModifierStr, '"');
   writeln('  Regular expression: ', T.Expression,' ,');
@@ -2874,5 +3694,9 @@ initialization
 {$IFDEF FPC}
   RegisterTest(TTestRegexpr);
 {$ENDIF}
+{$IFDEF NOTUSINGDUNITX}
+  RegisterTest(TTestRegexpr.Suite);
+{$ENDIF}
+
 end.
 
